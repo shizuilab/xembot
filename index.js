@@ -1,6 +1,7 @@
 var Blynk = require('blynk-library');
+var config = require('./config');
 
-var AUTH = '9864436b50dd4b3ea815f6207c6ee801';
+var AUTH = config.AUTH;
 
 var blynk = new Blynk.Blynk(AUTH);
 
