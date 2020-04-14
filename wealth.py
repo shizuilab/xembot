@@ -52,7 +52,7 @@ def main():
             last_price = stream['last_price']['price']
 
             try:
-                if(delay_time < 2):
+                if(delay_time < 60):
                     zaif_trade = ZaifTradeApi(KEY,SECRET)
                     funds_my_currency = zaif_trade.get_info2()['funds'][MY_CURRENCY]
                     funds_jpy = zaif_trade.get_info2()['funds']['jpy']

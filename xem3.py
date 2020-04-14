@@ -7,6 +7,10 @@
 # MACD&ボリンジャーバンド計算
 # sqlite導入
 # last_priceにask_priceとbid_priceの平均値を使うテスト
+# ボラティリティー対策：MACDを% of mean price x 1000で補正
+# 同じタイムスタンプで返ってくる＞sqliteエラー
+# 動的threshold-sell,buy = +- sigma
+# MACD > sigma で順張りに切り替え
 
 import datetime,time
 from zaifapi import ZaifPublicStreamApi,ZaifTradeApi
@@ -168,7 +172,7 @@ def main():
     database = "/home/pi/zaif/zaif_xem.db"
 
     sql_create_xemdb_table = """ CREATE TABLE IF NOT EXISTS xemdbs (
-                                        timestamp text PRIMARY KEY,
+                                        timestamp text,
                                         last_price real
                                     ); """
 
@@ -184,6 +188,7 @@ def main():
     old_trade20 = 0.0
     old_trade200 = 0.0
     old_MACD2 = 0.0
+    last_time_str = ""
 
     cur = conn.execute('SELECT * FROM xemdbs')
 
@@ -204,6 +209,8 @@ def main():
         # StreamAPIはジェネレータを戻しているのでこれでずっといける
         for stream in zaif_stream.execute(currency_pair=TARGET_CURRENCY_PAIR):
             time_str = stream['timestamp']
+            if time_str == last_time_str:
+                continue
             try:
                 trade_time = datetime.datetime.strptime(time_str, '%Y-%m-%d %H:%M:%S.%f')
             except:
@@ -219,6 +226,8 @@ def main():
             bid_price = bids[0][0]
             ask_price = asks[0][0]
             mean_price = (ask_price + bid_price)/2
+
+            last_time_str = time_str
 
             with conn:
                 xemdb = (time_str, mean_price);
@@ -246,11 +255,7 @@ def main():
             with open('/var/tmp/MA200.txt', 'w') as f:
                 f.write(str(trade200))
             with open('/var/tmp/MACD.txt', 'w') as f:
-                f.write(str(10000*(MACD - MACD2)))
-            with open('/home/pi/zaif/threshold-buy.txt', 'r') as f:
-                buy_threshold = float(f.read())
-            with open('/home/pi/zaif/threshold-sell.txt', 'r') as f:
-                sell_threshold = float(f.read())
+                f.write(str(100000*(MACD - MACD2)/mean_price))
 
             total_pressure = round(trade_data.depth_ask_amount+trade_data.depth_bid_amount)
             ask_pressure = round((trade_data.depth_ask_amount/total_pressure) * 100)
@@ -261,11 +266,17 @@ def main():
             print_yellow(mystr, 1)
 
             if ask_pressure >= 50:
-                mystr = '  ■ ゼムの価格は' + str(round(mean_price,1)) + '円で、買いが強く' + str(ask_pressure) + '%です'
+                mystr = '  ■ ゼムの価格は' + str(round(mean_price,2)) + '円で、買いが強く' + str(ask_pressure) + '%です'
+
                 print_red(mystr)
             else:
-                mystr = '  ■ ゼムの価格は' + str(round(mean_price,1)) + '円で、売りが強く' + str(100-ask_pressure) + '%です'
+                mystr = '  ■ ゼムの価格は' + str(round(mean_price,2)) + '円で、売りが強く' + str(100-ask_pressure) + '%です'
                 print_green(mystr)
+
+            if (MACD-MACD2)*10000 < 0:
+                mystr = mystr + 'マックディーは、マイナス' + str(round((MACD - MACD2)*100000/last_price)) + 'です'
+            else:
+                mystr = mystr + 'マックディーは' + str(round((MACD - MACD2)*10000)) + 'です'
 
             with open('/var/tmp/pressure.txt', 'w') as f:
                 f.write(mystr)
@@ -274,7 +285,7 @@ def main():
             old_trade200 = trade200
             old_MACD2 = MACD2
 
-            mystr = '  ■ MACD - MACD2 = ' + str(MACD - MACD2)
+            mystr = '  ■ MACD - MACD2 = ' + str((MACD - MACD2)*10/mean_price)
             if MACD - MACD2 > 0:
                 print_red(mystr)
             elif MACD - MACD2 < 0:
@@ -289,14 +300,26 @@ def main():
                 mean = s.mean() #移動平均値
                 mystr = '  ■ sigma = ' + str(sigma)
                 print_yellow(mystr)
+
+                with open('/home/pi/zaif/threshold-base-buy.txt', 'r') as f:
+                    threshold_base_buy = float(f.read())
+                with open('/home/pi/zaif/threshold-base-sell.txt', 'r') as f:
+                    threshold_base_sell = float(f.read())
+                buy_threshold = threshold_base_buy * sigma;
+                sell_threshold = threshold_base_sell * sigma;
+
                 with open('/var/tmp/mean.txt', 'w') as f:
                     f.write(str(mean))
                 with open('/var/tmp/sigma.txt', 'w') as f:
                     f.write(str(sigma))
                 with open('/var/tmp/upper.txt', 'w') as f:
-                    f.write(str(mean + 2 * sigma))
+                    f.write(str(mean + (2 * sigma)))
                 with open('/var/tmp/lower.txt', 'w') as f:
-                    f.write(str(mean - 2 * sigma))
+                    f.write(str(mean - (2 * sigma)))
+                with open('/var/tmp/threshold-buy.txt', 'w') as f:
+                    f.write(str(buy_threshold))
+                with open('/var/tmp/threshold-sell.txt', 'w') as f:
+                    f.write(str(sell_threshold))
 
             #トレード判断を書き込む
             if count < 2000:
@@ -304,15 +327,25 @@ def main():
                     f.write('wait' + str(2000-count))
                 print_blue('◆◆◆ 準備中 ◆◆◆', 1)
 
-            elif MACD - MACD2 < buy_threshold:
-                with open('/var/tmp/ask-bid.txt', 'w') as f:
-                    f.write('ask')
-                print_green('◆◆◆ XEM 売りモード ◆◆◆', 1)
-
-            elif MACD - MACD2 > sell_threshold:
+            elif (MACD - MACD2)*10/mean_price < -1 * sigma:
                 with open('/var/tmp/ask-bid.txt', 'w') as f:
                     f.write('bid')
-                print_red('◆◆◆ XEM 買いモード ◆◆◆', 1)
+                print_green('◆◆◆ XEM 順売りモード ◆◆◆', 1)
+
+            elif (MACD - MACD2)*10/mean_price > sigma:
+                with open('/var/tmp/ask-bid.txt', 'w') as f:
+                    f.write('ask')
+                print_red('◆◆◆ XEM 順買いモード ◆◆◆', 1)
+
+            elif (MACD - MACD2)*10/mean_price < buy_threshold:
+                with open('/var/tmp/ask-bid.txt', 'w') as f:
+                    f.write('ask')
+                print_red('◆◆◆ XEM 逆買いモード ◆◆◆', 1)
+
+            elif (MACD - MACD2)*10/mean_price > sell_threshold:
+                with open('/var/tmp/ask-bid.txt', 'w') as f:
+                    f.write('bid')
+                print_green('◆◆◆ XEM 逆売りモード ◆◆◆', 1)
 
             else:
                 with open('/var/tmp/ask-bid.txt', 'w') as f:

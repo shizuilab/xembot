@@ -1,5 +1,8 @@
 # coding: utf-8
 # 現物売り買い逆張りバージョン
+# 利確2%
+# 損切-1%
+# ask = 買い　bid = 売り（zaifAPIは逆）
 
 import datetime,time
 from zaifapi import ZaifPublicStreamApi,ZaifTradeApi
@@ -52,8 +55,12 @@ def do_trade(my_trade, askbid, last_price, bid_price, ask_price, funds_my_curren
                     f.write(str(my_price) + ' ' + str(bid_amount))
                 if(trade_result["order_id"] == 0):
                     print_red('■ 買い成功しました。', is_bold=True)
+                    with open('/var/tmp/mylastprice.txt', 'w') as f:
+                        f.write(str(my_price))
                 else:
                     print_red('■ 買い注文を出しています', is_bold=True)
+                    with open('/var/tmp/mylastprice.txt', 'w') as f:
+                        f.write(str(my_price))
                     time.sleep(60)
         except Exception as e:
             time.sleep(5)
@@ -62,9 +69,11 @@ def do_trade(my_trade, askbid, last_price, bid_price, ask_price, funds_my_curren
     elif 'bid' in askbid:
         try:
             my_price = round(0.0001 * int((ask_price - my_ask_drift)*10000), 4)
+            with open('/var/tmp/mylastprice.txt', 'r') as f:
+                mylastprice = float(f.read())
             ask_amount = round(funds_my_currency - 0.1, 1)
             print_green('◆◆◆ 売りモード (' + str(my_price) + ', ' + str(ask_amount) + ') ◆◆◆')
-            if(ask_amount >= 0.0001):
+            if(ask_amount >= 0.0001 and my_price > mylastprice * 1.02):
                 trade_result = my_trade.trade(currency_pair=TARGET_CURRENCY_PAIR, action="ask", price=my_price, amount=ask_amount)
                 #print(trade_result)
                 with open('/var/tmp/history.txt', 'w') as f:
@@ -78,7 +87,22 @@ def do_trade(my_trade, askbid, last_price, bid_price, ask_price, funds_my_curren
                     print_green('■ 売り注文を出しました', is_bold=True)
                     #os.system('aplay /home/pi/zaif/sound/chime13.wav > /dev/null 2>&1')
                     time.sleep(60)
-
+            elif(ask_amount >= 0.0001 and my_price < mylastprice * 0.99):
+                trade_result = my_trade.trade(currency_pair=TARGET_CURRENCY_PAIR, action="ask", price=my_price, amount=ask_amount)
+                #print(trade_result)
+                with open('/var/tmp/history.txt', 'w') as f:
+                    f.write('Selling XEM')
+                with open('/var/tmp/timestamp.txt', 'w') as f:
+                    f.write(str(my_price) + ' ' + str(ask_amount))
+                if(trade_result["order_id"] == 0):
+                    print_green('■ 損切り売り成功しました。', is_bold=True)
+                    #os.system('aplay /home/pi/zaif/sound/chime10.wav > /dev/null 2>&1')
+                else:
+                    print_green('■ 損切り売り注文を出しました', is_bold=True)
+                    #os.system('aplay /home/pi/zaif/sound/chime13.wav > /dev/null 2>&1')
+                    time.sleep(60)
+            else:
+                print_red("売り禁止範囲！")
         except Exception as e:
             time.sleep(5)
             print_green(str(e.args))
@@ -100,6 +124,10 @@ def main():
     my_trade_size = 0.1
 
     try:
+        with open('/var/tmp/history.txt', 'w') as f:
+            f.write('Starting UP')
+        with open('/var/tmp/timestamp.txt', 'w') as f:
+            f.write('No Trade yet')
         # StreamAPIはジェネレータを戻しているのでこれでずっといける
         for stream in zaif_stream.execute(currency_pair=TARGET_CURRENCY_PAIR):
             time_str = stream['timestamp']
@@ -113,7 +141,7 @@ def main():
             print('bid_price:', bid_price, 'ask_price', ask_price)
 
             try:
-                if(delay_time < 2):
+                if(delay_time < 60):
                     zaif_trade = ZaifTradeApi(KEY,SECRET)
 
                     funds_my_currency = zaif_trade.get_info2()['funds'][MY_CURRENCY]
