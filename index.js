@@ -1,6 +1,7 @@
 var Blynk = require('blynk-library');
+var config = require('./config');
 
-var AUTH = '9864436b50dd4b3ea815f6207c6ee801';
+var AUTH = config.AUTH;
 
 var blynk = new Blynk.Blynk(AUTH);
 
@@ -15,14 +16,16 @@ var v7 = new blynk.VirtualPin(7);//bid-price
 var v8 = new blynk.VirtualPin(8);//ask-price
 var v9 = new blynk.VirtualPin(9);//history
 var v10 = new blynk.VirtualPin(10);//history
-var v11 = new blynk.VirtualPin(11);//last_price
+var v11 = new blynk.VirtualPin(11);//mean_price
 var v12 = new blynk.VirtualPin(12);//trade-size
 var v13 = new blynk.VirtualPin(13);//threshold-buy
 var v14 = new blynk.VirtualPin(14);//threshold-sell
+var v15 = new blynk.VirtualPin(15);//基準価格リセット
+var v16 = new blynk.VirtualPin(16);//基準価格
 
 v1.on('read', function() {
   const fs = require('fs');
-  const price = fs.readFileSync("/var/tmp/price.txt", {encoding: "utf-8"});
+  const price = fs.readFileSync("/var/tmp/last_price.txt", {encoding: "utf-8"});
   v1.write(price);
 });
 
@@ -70,8 +73,8 @@ v8.on('read', function() {
 
 v11.on('read', function() {
   const fs = require('fs');
-  const price = fs.readFileSync("/var/tmp/last_price.txt", {encoding: "utf-8"});
-  v11.write(price);
+  const meanprice = fs.readFileSync("/var/tmp/mean.txt", {encoding: "utf-8"});
+  v11.write(meanprice);
 });
 
 v0.on('read', function() {
@@ -79,13 +82,17 @@ v0.on('read', function() {
   const askbid = fs.readFileSync("/var/tmp/ask-bid.txt", {encoding: "utf-8"});
   const history = fs.readFileSync("/var/tmp/history.txt", {encoding: "utf-8"});
   const timestamp = fs.readFileSync("/var/tmp/timestamp.txt", {encoding: "utf-8"});
-  var threshold_buy = parseFloat(fs.readFileSync("/home/pi/zaif/threshold-buy.txt"));
-  var threshold_sell = parseFloat(fs.readFileSync("/home/pi/zaif/threshold-sell.txt"));
+  var trade_size = parseFloat(fs.readFileSync("/home/pi/zaif/trade-size.txt"));
+  var threshold_buy = parseFloat(fs.readFileSync("/var/tmp/threshold-buy.txt"));
+  var threshold_sell = parseFloat(fs.readFileSync("/var/tmp/threshold-sell.txt"));
+  var mylastprice = parseFloat(fs.readFileSync("/var/tmp/mylastprice.txt"));
   v0.write(askbid);
   v9.write(timestamp);
   v10.write(history);
+  v12.write(String(trade_size));
   v13.write(String(threshold_buy * 10000));
   v14.write(String(threshold_sell * 10000));
+  v16.write(String(mylastprice));
 });
 
 v12.on('write', function(param) {
@@ -93,13 +100,21 @@ v12.on('write', function(param) {
   fs.writeFileSync("/home/pi/zaif/trade-size.txt", param[0]);
 });
 
-v13.on('write', function(param) {
+//v13.on('write', function(param) {
+//  const fs = require('fs');
+//  fs.writeFileSync("/var/tmp/threshold-buy.txt", param[0]/10000);
+//});
+
+//v14.on('write', function(param) {
+//  const fs = require('fs');
+//  fs.writeFileSync("/var/tmp/threshold-sell.txt", param[0]/10000);
+//});
+
+v15.on('write', function(param) {
   const fs = require('fs');
-  fs.writeFileSync("/home/pi/zaif/threshold-buy.txt", param[0]/10000);
+  var last_price = parseFloat(fs.readFileSync("/var/tmp/last_price.txt"));
+  fs.writeFileSync("/var/tmp/mylastprice.txt", last_price);
 });
 
-v14.on('write', function(param) {
-  const fs = require('fs');
-  fs.writeFileSync("/home/pi/zaif/threshold-sell.txt", param[0]/10000);
-});
+
 
