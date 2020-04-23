@@ -1,0 +1,12 @@
+[Unit]
+Description = zaif wealth2 daemon
+After = network-online.target
+
+[Service]
+User=pi
+ExecStart = /home/pi/zaif/wealth2.py
+Type = simple
+Restart=always
+
+[Install]
+WantedBy = network-online.target

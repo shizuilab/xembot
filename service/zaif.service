@@ -1,0 +1,13 @@
+[Unit]
+Description = zaif assistant daemon
+After = network-online.target
+
+[Service]
+User=pi
+Environment=DISPLAY=:0
+ExecStart = lxterminal -e /home/pi/zaif/assistant_zaif3.py
+Type = simple
+RuntimeMaxSec=3600
+
+[Install]
+WantedBy = network-online.target

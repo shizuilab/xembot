@@ -1,0 +1,12 @@
+[Unit]
+Description = zaif xem3 daemon
+After = network-online.target
+
+[Service]
+User=pi
+ExecStart = /home/pi/zaif/xem3.py
+Type = simple
+Restart=always
+
+[Install]
+WantedBy = network-online.target

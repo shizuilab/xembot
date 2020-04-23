@@ -1,0 +1,12 @@
+[Unit]
+Description=Runs zaif.service
+
+[Timer]
+# ブート後、この時間後にこのタイマーを開始する
+OnBootSec=3min
+# 実行する時間の間隔
+OnUnitActiveSec=1min
+Unit=zaif.service
+
+[Install]
+WantedBy=multi-user.target
