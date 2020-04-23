@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 # coding: utf-8
 # 現物売り買い逆張りバージョン
 # 利確2%
@@ -193,17 +194,17 @@ def main():
                                 print(" ◆",id, remaining_orders[id]['price'])
                                 print_yellow("    をキャンセルします",1)
                                 zaif_trade.cancel_order(order_id = int(id))
-                                os.system('aplay /home/pi/zaif/chime13.wav > /dev/null 2>&1')
                         else:
                             print_yellow(' ◆◆◆ 未決注文はありません ◆◆◆')
 
                     except Exception as e:
-                        time.sleep(1)
+                        time.sleep(5)
                         print_yellow(str(e.args))
 
             except Exception as e:
                 print_yellow(str(e.args), 1)
                 time.sleep(5)
+            time.sleep(5)
 
     except KeyboardInterrupt:
         print_green('Bye', 1)

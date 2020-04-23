@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 # coding: utf-8
 # Copyright 2017 Google Inc.
 #
@@ -20,7 +20,7 @@
 # ボリンジャーバンド連動モード追加
 # 起動時にボリンジャーでthresholdを補正（タイマーで追随可能）> Googleのtoo many requestエラー
 # 売り買い判断指数をRAMディスクに退避 > xem3.pyで直接コントロール
-# Voiceでコントロールするのはthreshold_base_buy/sell (-1.0, 1.0) auto0:取引量０で取引停止
+# Voiceでコントロールするのは取引量のみ auto0:取引量０で取引停止
 
 """Run a recognizer using the Google Assistant Library.
 
@@ -61,19 +61,19 @@ font = ImageFont.load_default()
 font1 = ImageFont.truetype("/home/pi/fonts/misaki_gothic.ttf", 8, encoding='unic')
 
 with open('/var/tmp/message.txt', 'w') as f:
-    f.write("")
+    f.write("準備中")
 
 def led_ready():
     with open('/var/tmp/message.txt', 'w') as f:
-        f.write("")
+        f.write("準備完了")
 
 def led_listening():
     with open('/var/tmp/message.txt', 'w') as f:
-        f.write("？")
+        f.write("質問をどうぞ")
 
 def led_thinking():
     with open('/var/tmp/message.txt', 'w') as f:
-        f.write("？")
+        f.write("考え中")
 
 class MyThread(threading.Thread):
 
@@ -101,18 +101,14 @@ class MyThread(threading.Thread):
                 askbid = f.read()
 
             if askbid == "ask":
-                text = "買"
-            elif askbid == "bid":
-                text = "売"
-
-            with open('/var/tmp/MACD.txt', 'r') as f:
-                MACD = float(f.read())
-            if MACD < -100:
                 fontcolor = (255, 0, 0)
-            elif MACD > 100:
+            elif askbid == "bid":
                 fontcolor = (0, 255, 0)
             else:
                 fontcolor = (255, 255, 0)
+
+            with open('/var/tmp/MACD.txt', 'r') as f:
+                MACD = float(f.read())
 
             draw.line((0, 7, 7, 7), fill=(0, 0, 0))
             if MACD < -100:
@@ -129,14 +125,7 @@ class MyThread(threading.Thread):
                     print("failed to get trade size.")
                     trade_size = 0
 
-            if trade_size > 0:
-                scroll_on = False
-            else:
-                scroll_on = True
-
-            with open('/var/tmp/message.txt', 'r') as f:
-                text = f.read()
-
+            scroll_on = True
             startpos = 7
             pos = startpos
             while scroll_on:
@@ -166,13 +155,6 @@ class MyThread(threading.Thread):
                     scroll_on = False
 
                 time.sleep(0.1)
-
-            display.clear()
-            draw.rectangle((0, 0, 7, 6), outline=(0, 0, 0), fill=(0, 0, 0))
-            draw.text((0, 0), text, font=font1, fill=fontcolor)
-            display.set_image(image)
-            display.write_display()
-            time.sleep(1)
 
     def stop(self):
         if self.is_alive():
@@ -208,30 +190,10 @@ def auto0_xem():
     #tts.say('OK, I am going to start automatic trading with mild threshold')
 
 def auto_xem():
-    with open('/home/pi/zaif/threshold-base-buy.txt', 'w') as f:
-        f.write('-0.5')
-    with open('/home/pi/zaif/threshold-base-sell.txt', 'w') as f:
-        f.write('0.5')
     with open('/home/pi/zaif/trade-size.txt', 'w') as f:
         f.write('500')
-    os.system("/home/pi/aquestalkpi/AquesTalkPi -g 80 '自動モードに切り替えます' | aplay")
+    os.system("/home/pi/aquestalkpi/AquesTalkPi -g 80 '自動取引モードに切り替えます' | aplay")
     #tts.say('OK, I am going to start automatic trading with mild threshold')
-
-def buy_xem_now():
-    with open('/home/pi/zaif/threshold-base-buy.txt', 'w') as f:
-        f.write('1.0')
-    with open('/home/pi/zaif/threshold-base-sell.txt', 'w') as f:
-        f.write('2.0')
-    os.system("/home/pi/aquestalkpi/AquesTalkPi -g 80 'ゼムを購入します' | aplay") 
-    #tts.say('OK, I am going to buy xem, now')
-
-def sell_xem_now():
-    with open('/home/pi/zaif/threshold-base-buy.txt', 'w') as f:
-        f.write('-2.0')
-    with open('/home/pi/zaif/threshold-base-sell.txt', 'w') as f:
-        f.write('-1.0')
-    os.system("/home/pi/aquestalkpi/AquesTalkPi -g 80 'ゼムを売りますね' | aplay") 
-    #tts.say('OK, I am going to sell xem, now')
 
 def situation_xem():
     with open('/var/tmp/pressure.txt', 'r') as f:
@@ -267,27 +229,20 @@ def process_event(assistant, led, event):
         elif '仮想通貨' in text or '暗号通貨' in text:
             if '買' in text:
                 assistant.stop_conversation()
-                buy_xem_now()
+                auto_xem()
             elif '売' in text:
                 assistant.stop_conversation()
-                sell_xem_now()
+                auto_xem()
             else:
                 assistant.stop_conversation()
                 situation_xem()
         elif 'ゼム' in text:
             if '買' in text:
                 assistant.stop_conversation()
-                buy_xem_now()
+                auto_xem()
             elif '売' in text:
                 assistant.stop_conversation()
-                sell_xem_now()
-        elif '全部' in text:
-            if '買' in text:
-                assistant.stop_conversation()
-                buy_xem_now()
-            elif '売' in text:
-                assistant.stop_conversation()
-                sell_xem_now()
+                auto_xem()
         elif '自動' in text:
             if '開' in text:
                 assistant.stop_conversation()
